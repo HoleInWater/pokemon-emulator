@@ -1,0 +1,1584 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎮 Pokémon ROM Emulator</title>
+    <script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/nostalgist@0.19.2/dist/nostalgist.umd.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            text-align: center;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        header h1 {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        header p {
+            font-size: 18px;
+            color: #666;
+        }
+
+        .status-bar {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            min-height: 60px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .status-message {
+            flex: 1;
+            font-weight: 600;
+            border-radius: 8px;
+            padding: 10px 15px;
+            margin: 0;
+        }
+
+        .status-message.info {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .status-message.success {
+            background: #e8f5e8;
+            color: #4caf50;
+        }
+
+        .status-message.error {
+            background: #ffebee;
+            color: #f44336;
+        }
+
+        .status-message.warning {
+            background: #fff8e1;
+            color: #ff9800;
+        }
+
+        .status-close {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+            margin-left: 10px;
+            opacity: 0.6;
+            transition: opacity 0.3s;
+        }
+
+        .status-close:hover {
+            opacity: 1;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        .game-selection {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+        }
+
+        .game-selection h2 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+            text-align: center;
+        }
+
+        .games-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .game-card {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            border: none;
+            border-radius: 15px;
+            padding: 20px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .game-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+        }
+
+        .game-card.loading {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .game-card.playing {
+            background: linear-gradient(135deg, #4caf50 0%, #45a049 100%);
+            color: white;
+        }
+
+        .game-card h3 {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .game-card .system {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .game-card .status {
+            font-size: 11px;
+            font-weight: 500;
+        }
+
+        .game-card.playing .status {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .playing-indicator {
+            width: 8px;
+            height: 8px;
+            background: #4caf50;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .emulator-section {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            display: none;
+        }
+
+        .emulator-section.active {
+            display: block;
+        }
+
+        .game-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .game-info h3 {
+            font-size: 18px;
+            color: #333;
+        }
+
+        .game-info .details {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 12px 24px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:active:not(:disabled) {
+            transform: translateY(0);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn.secondary {
+            background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+        }
+
+        .btn.danger {
+            background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+        }
+
+        .btn.success {
+            background: linear-gradient(135deg, #28a745 0%, #218838 100%);
+        }
+
+        .canvas-container {
+            background: #000;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 400px;
+            position: relative;
+        }
+
+        #gameCanvas {
+            max-width: 100%;
+            height: auto;
+            image-rendering: pixelated;
+            image-rendering: -moz-crisp-edges;
+            image-rendering: crisp-edges;
+            border-radius: 8px;
+        }
+
+        .save-states {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            margin-top: 20px;
+        }
+
+        .save-states h3 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .save-slots {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .save-slot {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .save-slot:hover {
+            border-color: #667eea;
+        }
+
+        .save-slot.current {
+            border-color: #4caf50;
+            background: #e8f5e8;
+        }
+
+        .save-slot-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .save-slot-title {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .save-slot-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .save-slot button {
+            padding: 5px 10px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .save-slot .load-btn {
+            background: #007bff;
+            color: white;
+        }
+
+        .save-slot .save-btn {
+            background: #28a745;
+            color: white;
+        }
+
+        .save-slot .delete-btn {
+            background: #dc3545;
+            color: white;
+        }
+
+        .save-slot button:hover {
+            opacity: 0.8;
+        }
+
+        .performance-info {
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .performance-info span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .save-slot-info {
+            font-size: 12px;
+            color: #666;
+            line-height: 1.4;
+        }
+
+        .instructions {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            margin-top: 20px;
+        }
+
+        .instructions h3 {
+            font-size: 20px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        .instructions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .instructions-section h4 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #667eea;
+        }
+
+        .instructions-section ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .instructions-section li {
+            padding: 5px 0;
+            font-size: 14px;
+            color: #666;
+        }
+
+        .instructions-section kbd {
+            background: #f1f3f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: monospace;
+            font-size: 12px;
+            border: 1px solid #dadce0;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+
+            header {
+                padding: 20px;
+            }
+
+            header h1 {
+                font-size: 24px;
+            }
+
+            .controls {
+                justify-content: center;
+            }
+
+            .btn {
+                flex: 1;
+                min-width: 120px;
+            }
+
+            .games-grid {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            }
+
+            .save-slots {
+                grid-template-columns: 1fr;
+            }
+
+            .instructions-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎮 Pokémon ROM Emulator</h1>
+            <p>Play GB, GBC, and GBA games in your browser</p>
+        </header>
+
+        <div class="status-bar">
+            <div id="statusMessage" class="status-message info">Ready! Select a game to begin.</div>
+            <button class="status-close hidden" onclick="hideStatus()">×</button>
+        </div>
+
+        <div class="main-content">
+            <section class="game-selection" id="gameSelection">
+                <h2>Select a Game</h2>
+                <div class="games-grid" id="gamesGrid">
+                    <!-- Games will be populated here -->
+                </div>
+            </section>
+
+            <section class="emulator-section" id="emulatorSection">
+                <div class="game-info">
+                    <div>
+                        <h3 id="currentGameTitle">-</h3>
+                        <div class="details" id="currentGameDetails">-</div>
+                    </div>
+                    <div>
+                        <div>Play Time: <span id="playTime">0:00:00</span></div>
+                        <div>Last Saved: <span id="lastSaved">Never</span></div>
+                    </div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn secondary" onclick="backToMenu()">← Back to Menu</button>
+                    <button class="btn success" onclick="saveGame()" id="saveBtn">💾 Save Game</button>
+                    <button class="btn" onclick="saveState(1)" id="quickSaveBtn">⚡ Quick Save (F5)</button>
+                    <button class="btn" onclick="loadState(1)" id="quickLoadBtn">⚡ Quick Load (F8)</button>
+                    <button class="btn" onclick="exportAllSaves()">📤 Export All</button>
+                    <button class="btn" onclick="document.getElementById('importSaveInput').click()">📥 Import Save</button>
+                    <input type="file" id="importSaveInput" style="display: none" accept=".sav,.state" onchange="importSave(event)">
+                    <button class="btn danger" onclick="resetGame()">🔄 Reset Game</button>
+                    <button class="btn" onclick="toggleFullscreen()">📺 Fullscreen</button>
+                </div>
+                <div class="performance-info" id="performanceInfo" style="display: none;">
+                    <span>FPS: <span id="fpsCounter">60</span></span>
+                    <span>Audio: <span id="audioStatus">✅</span></span>
+                    <span>Memory: <span id="memoryUsage">0 MB</span></span>
+                </div>
+
+                <div class="canvas-container">
+                    <canvas id="gameCanvas"></canvas>
+                </div>
+            </section>
+
+            <section class="save-states" id="saveStatesSection">
+                <h3>Save States</h3>
+                <div class="save-slots" id="saveSlots">
+                    <!-- Save slots will be populated here -->
+                </div>
+            </section>
+
+            <section class="instructions">
+                <h3>How to Play</h3>
+                <div class="instructions-grid">
+                    <div class="instructions-section">
+                        <h4>🎮 Controls</h4>
+                        <ul>
+                            <li><kbd>↑</kbd> <kbd>↓</kbd> <kbd>←</kbd> <kbd>→</kbd> D-Pad</li>
+                            <li><kbd>Z</kbd> A Button</li>
+                            <li><kbd>X</kbd> B Button</li>
+                            <li><kbd>A</kbd> L Trigger (GBA only)</li>
+                            <li><kbd>S</kbd> R Trigger (GBA only)</li>
+                            <li><kbd>Enter</kbd> Start</li>
+                            <li><kbd>Shift</kbd> Select</li>
+                        </ul>
+                    </div>
+                    <div class="instructions-section">
+                        <h4>⚡ Quick Actions</h4>
+                        <ul>
+                            <li><kbd>F5</kbd> Quick Save (Slot 1)</li>
+                            <li><kbd>F8</kbd> Quick Load (Slot 1)</li>
+                            <li><kbd>Tab</kbd> Fast Forward (Hold)</li>
+                            <li><kbd>F11</kbd> Toggle Fullscreen</li>
+                            <li><kbd>Space</kbd> Pause/Resume</li>
+                            <li><kbd>Ctrl+E</kbd> Export Saves</li>
+                            <li><kbd>Ctrl+I</kbd> Import Saves</li>
+                            <li><kbd>Shift+P</kbd> Performance Info</li>
+                        </ul>
+                    </div>
+                    <div class="instructions-section">
+                        <h4>💾 Save System</h4>
+                        <ul>
+                            <li><strong>Battery Save:</strong> In-game progress</li>
+                            <li><strong>Save States:</strong> Quick snapshots</li>
+                            <li>Auto-saves every 60 seconds</li>
+                            <li><strong>Export All:</strong> Download backup file</li>
+                            <li><strong>Import:</strong> Restore from backup</li>
+                        </ul>
+                    </div>
+                    <div class="instructions-section">
+                        <h4>📊 Performance</h4>
+                        <ul>
+                            <li>Hold <kbd>P</kbd> for performance info</li>
+                            <li>FPS counter and memory usage</li>
+                            <li>Audio status indicator</li>
+                            <li>Pause/Resume with <kbd>Space</kbd></li>
+                        </ul>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════
+        // CONFIGURATION
+        // ═══════════════════════════════════════════════════════════
+        const CONFIG = {
+            dbName: 'PokemonEmulatorSaves',
+            dbVersion: 1,
+            autoSaveInterval: 60000, // 60 seconds
+            maxSaveStates: 4,
+            rewindBufferSize: 600, // 10 seconds at 60fps
+            romPath: '/roms/' // Change this to your ROM folder path
+        };
+
+        // ═══════════════════════════════════════════════════════════
+        // GAME CATALOG
+        // ═══════════════════════════════════════════════════════════
+        const GAME_CATALOG = [
+            { id: 'pokemon-red', title: 'Pokémon Red', system: 'Game Boy', rom: 'pokemon-red.gb', type: 'gb' },
+            { id: 'pokemon-blue', title: 'Pokémon Blue', system: 'Game Boy', rom: 'pokemon-blue.gb', type: 'gb' },
+            { id: 'pokemon-yellow', title: 'Pokémon Yellow', system: 'Game Boy', rom: 'pokemon-yellow.gb', type: 'gb' },
+            { id: 'pokemon-gold', title: 'Pokémon Gold', system: 'Game Boy Color', rom: 'pokemon-gold.gbc', type: 'gbc' },
+            { id: 'pokemon-silver', title: 'Pokémon Silver', system: 'Game Boy Color', rom: 'pokemon-silver.gbc', type: 'gbc' },
+            { id: 'pokemon-crystal', title: 'Pokémon Crystal', system: 'Game Boy Color', rom: 'pokemon-crystal.gbc', type: 'gbc' },
+            { id: 'pokemon-ruby', title: 'Pokémon Ruby', system: 'Game Boy Advance', rom: 'pokemon-ruby.gba', type: 'gba' },
+            { id: 'pokemon-sapphire', title: 'Pokémon Sapphire', system: 'Game Boy Advance', rom: 'pokemon-sapphire.gba', type: 'gba' },
+            { id: 'pokemon-emerald', title: 'Pokémon Emerald', system: 'Game Boy Advance', rom: 'pokemon-emerald.gba', type: 'gba' },
+            { id: 'pokemon-firered', title: 'Pokémon FireRed', system: 'Game Boy Advance', rom: 'pokemon-firered.gba', type: 'gba' },
+            { id: 'pokemon-leafgreen', title: 'Pokémon LeafGreen', system: 'Game Boy Advance', rom: 'pokemon-leafgreen.gba', type: 'gba' }
+        ];
+
+        // ═══════════════════════════════════════════════════════════
+        // STATE MANAGEMENT
+        // ═══════════════════════════════════════════════════════════
+        const State = {
+            emulator: null,
+            currentGame: null,
+            db: null,
+            isPlaying: false,
+            saveInterval: null,
+            playStartTime: null,
+            totalPlayTime: 0,
+            lastSaveTime: null
+        };
+
+        // ═══════════════════════════════════════════════════════════
+        // UI CONTROLLER
+        // ═══════════════════════════════════════════════════════════
+        class UIController {
+            static showStatus(message, type = 'info', timeout = 5000) {
+                const statusEl = document.getElementById('statusMessage');
+                const closeBtn = statusEl.nextElementSibling;
+                
+                statusEl.className = `status-message ${type}`;
+                statusEl.textContent = message;
+                
+                if (type === 'error') {
+                    closeBtn.classList.remove('hidden');
+                } else {
+                    closeBtn.classList.add('hidden');
+                    if (timeout > 0) {
+                        setTimeout(() => {
+                            statusEl.textContent = 'Ready!';
+                            statusEl.className = 'status-message info';
+                        }, timeout);
+                    }
+                }
+            }
+
+            static updateGameInfo(game) {
+                document.getElementById('currentGameTitle').textContent = game.title;
+                document.getElementById('currentGameDetails').textContent = 
+                    `${game.system} • ${game.rom.toUpperCase()} • ROM Size: Loading...`;
+            }
+
+            static showGameSelection() {
+                document.getElementById('gameSelection').style.display = 'block';
+                document.getElementById('emulatorSection').classList.remove('active');
+                document.getElementById('saveStatesSection').style.display = 'none';
+            }
+
+            static showEmulator() {
+                document.getElementById('gameSelection').style.display = 'none';
+                document.getElementById('emulatorSection').classList.add('active');
+                document.getElementById('saveStatesSection').style.display = 'block';
+            }
+
+            static updateGameCard(gameId, status) {
+                const card = document.querySelector(`[data-game-id="${gameId}"]`);
+                if (card) {
+                    card.className = `game-card ${status}`;
+                    const statusEl = card.querySelector('.status');
+                    if (status === 'loading') {
+                        statusEl.innerHTML = '<span class="loading-spinner"></span> Loading...';
+                    } else if (status === 'playing') {
+                        statusEl.innerHTML = '<span class="playing-indicator"></span> Now Playing';
+                    } else {
+                        statusEl.textContent = 'Click to Play';
+                    }
+                }
+            }
+
+            static updatePlayTime() {
+                if (State.playStartTime) {
+                    const elapsed = Date.now() - State.playStartTime + State.totalPlayTime;
+                    const hours = Math.floor(elapsed / 3600000);
+                    const minutes = Math.floor((elapsed % 3600000) / 60000);
+                    const seconds = Math.floor((elapsed % 60000) / 1000);
+                    document.getElementById('playTime').textContent = 
+                        `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }
+
+            static updateLastSaved() {
+                if (State.lastSaveTime) {
+                    const time = new Date(State.lastSaveTime).toLocaleTimeString();
+                    document.getElementById('lastSaved').textContent = time;
+                } else {
+                    document.getElementById('lastSaved').textContent = 'Never';
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // DATABASE OPERATIONS
+        // ═══════════════════════════════════════════════════════════
+        class SaveDatabase {
+            async init() {
+                return new Promise((resolve, reject) => {
+                    const request = indexedDB.open(CONFIG.dbName, CONFIG.dbVersion);
+                    
+                    request.onerror = () => reject(request.error);
+                    request.onsuccess = () => {
+                        State.db = request.result;
+                        resolve();
+                    };
+                    
+                    request.onupgradeneeded = (event) => {
+                        const db = event.target.result;
+                        
+                        // Battery saves (in-game saves)
+                        if (!db.objectStoreNames.contains('batterySaves')) {
+                            db.createObjectStore('batterySaves', { keyPath: 'id' });
+                        }
+                        
+                        // Save states (emulator states)
+                        if (!db.objectStoreNames.contains('saveStates')) {
+                            db.createObjectStore('saveStates', { keyPath: 'id' });
+                        }
+                        
+                        // Game metadata
+                        if (!db.objectStoreNames.contains('gameMetadata')) {
+                            db.createObjectStore('gameMetadata', { keyPath: 'gameId' });
+                        }
+                    };
+                });
+            }
+
+            async saveBattery(gameId, data) {
+                const save = {
+                    id: `battery_${gameId}`,
+                    gameId: gameId,
+                    data: data,
+                    timestamp: new Date().toISOString()
+                };
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = State.db.transaction(['batterySaves'], 'readwrite');
+                    const store = transaction.objectStore('batterySaves');
+                    const request = store.put(save);
+                    
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async loadBattery(gameId) {
+                return new Promise((resolve, reject) => {
+                    const transaction = State.db.transaction(['batterySaves'], 'readonly');
+                    const store = transaction.objectStore('batterySaves');
+                    const request = store.get(`battery_${gameId}`);
+                    
+                    request.onsuccess = () => resolve(request.result?.data || null);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async saveState(gameId, slot, data, screenshot = null) {
+                const state = {
+                    id: `state_${gameId}_${slot}`,
+                    gameId: gameId,
+                    slot: slot,
+                    data: data,
+                    screenshot: screenshot,
+                    timestamp: new Date().toISOString()
+                };
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = State.db.transaction(['saveStates'], 'readwrite');
+                    const store = transaction.objectStore('saveStates');
+                    const request = store.put(state);
+                    
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async loadState(gameId, slot) {
+                return new Promise((resolve, reject) => {
+                    const transaction = State.db.transaction(['saveStates'], 'readonly');
+                    const store = transaction.objectStore('saveStates');
+                    const request = store.get(`state_${gameId}_${slot}`);
+                    
+                    request.onsuccess = () => resolve(request.result || null);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async listStates(gameId) {
+                return new Promise((resolve, reject) => {
+                    const transaction = State.db.transaction(['saveStates'], 'readonly');
+                    const store = transaction.objectStore('saveStates');
+                    const request = store.getAll();
+                    
+                    request.onsuccess = () => {
+                        const states = request.result.filter(s => s.gameId === gameId);
+                        resolve(states);
+                    };
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async deleteState(gameId, slot) {
+                return new Promise((resolve, reject) => {
+                    const transaction = State.db.transaction(['saveStates'], 'readwrite');
+                    const store = transaction.objectStore('saveStates');
+                    const request = store.delete(`state_${gameId}_${slot}`);
+                    
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async getAllSavesForGame(gameId) {
+                const batterySave = await this.loadBattery(gameId);
+                const saveStates = await this.listStates(gameId);
+                
+                return {
+                    batterySave: batterySave,
+                    saveStates: saveStates,
+                    gameTitle: gameId,
+                    exportTime: new Date().toISOString()
+                };
+            }
+
+            async getGameMetadata(gameId) {
+                return new Promise((resolve, reject) => {
+                    const transaction = State.db.transaction(['gameMetadata'], 'readonly');
+                    const store = transaction.objectStore('gameMetadata');
+                    const request = store.get(gameId);
+                    
+                    request.onsuccess = () => resolve(request.result || null);
+                    request.onerror = () => reject(request.error);
+                });
+            }
+
+            async saveGameMetadata(gameId, metadata) {
+                const data = {
+                    gameId: gameId,
+                    ...metadata,
+                    lastUpdated: new Date().toISOString()
+                };
+                
+                return new Promise((resolve, reject) => {
+                    const transaction = State.db.transaction(['gameMetadata'], 'readwrite');
+                    const store = transaction.objectStore('gameMetadata');
+                    const request = store.put(data);
+                    
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // EMULATOR CORE
+        // ═══════════════════════════════════════════════════════════
+        class EmulatorCore {
+            constructor(canvas) {
+                this.canvas = canvas;
+                this.nostalgist = null;
+            }
+
+            async loadROM(romData, romType) {
+                try {
+                    this.nostalgist = await Nostalgist.nostalgist.launch({
+                        core: romType,
+                        rom: romData,
+                        element: this.canvas,
+                        retroarchConfig: {
+                            audio_enable: true,
+                            video_scale_integer: true,
+                            video_scale_integer_scale: 2,
+                            input_player1_up: 'up',
+                            input_player1_down: 'down',
+                            input_player1_left: 'left',
+                            input_player1_right: 'right',
+                            input_player1_a: 'z',
+                            input_player1_b: 'x',
+                            input_player1_l: 'a',
+                            input_player1_r: 's',
+                            input_player1_start: 'enter',
+                            input_player1_select: 'shift'
+                        }
+                    });
+                } catch (error) {
+                    throw new Error(`Failed to load ROM: ${error.message}`);
+                }
+            }
+
+            start() {
+                if (this.nostalgist) {
+                    this.nostalgist.resume();
+                }
+            }
+
+            pause() {
+                if (this.nostalgist) {
+                    this.nostalgist.pause();
+                }
+            }
+
+            reset() {
+                if (this.nostalgist) {
+                    this.nostalgist.restart();
+                }
+            }
+
+            async getSaveRAM() {
+                if (this.nostalgist) {
+                    try {
+                        return await this.nostalgist.saveSRAM();
+                    } catch (error) {
+                        console.error('Failed to get SRAM:', error);
+                        return null;
+                    }
+                }
+                return null;
+            }
+
+            async loadSaveRAM(data) {
+                if (this.nostalgist && data) {
+                    // Nostalgist doesn't have a direct loadSRAM method
+                    // This would need to be implemented via the core's save system
+                    console.warn('Load SRAM not fully implemented in Nostalgist');
+                }
+            }
+
+            async captureState() {
+                if (this.nostalgist) {
+                    try {
+                        return await this.nostalgist.saveState();
+                    } catch (error) {
+                        console.error('Failed to capture state:', error);
+                        return null;
+                    }
+                }
+                return null;
+            }
+
+            async restoreState(data) {
+                if (this.nostalgist && data) {
+                    try {
+                        await this.nostalgist.loadState(data);
+                        return true;
+                    } catch (error) {
+                        console.error('Failed to restore state:', error);
+                        return false;
+                    }
+                }
+                return false;
+            }
+
+            async screenshot() {
+                if (this.nostalgist) {
+                    try {
+                        return await this.nostalgist.screenshot();
+                    } catch (error) {
+                        console.error('Failed to take screenshot:', error);
+                        return null;
+                    }
+                }
+                return null;
+            }
+
+            destroy() {
+                if (this.nostalgist) {
+                    this.nostalgist.exit({ removeCanvas: false });
+                    this.nostalgist = null;
+                }
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // MAIN APPLICATION
+        // ═══════════════════════════════════════════════════════════
+        class EmulatorApp {
+            constructor() {
+                this.db = new SaveDatabase();
+                this.emulator = null;
+                this.playTimeInterval = null;
+                this.setupKeyboardControls();
+            }
+
+            async init() {
+                try {
+                    await this.db.init();
+                    this.populateGameGrid();
+                    UIController.showStatus('Ready! Select a game to begin.', 'info');
+                } catch (error) {
+                    UIController.showStatus('Failed to initialize: ' + error.message, 'error', 0);
+                }
+            }
+
+            populateGameGrid() {
+                const grid = document.getElementById('gamesGrid');
+                grid.innerHTML = '';
+                
+                GAME_CATALOG.forEach(game => {
+                    const card = document.createElement('button');
+                    card.className = 'game-card';
+                    card.dataset.gameId = game.id;
+                    card.onclick = () => this.loadGame(game);
+                    
+                    card.innerHTML = `
+                        <h3>${game.title}</h3>
+                        <div class="system">${game.system}</div>
+                        <div class="status">Click to Play</div>
+                    `;
+                    
+                    grid.appendChild(card);
+                });
+            }
+
+            async loadGame(game) {
+                try {
+                    UIController.updateGameCard(game.id, 'loading');
+                    UIController.showStatus(`Loading ${game.title}...`, 'info');
+                    
+                    // Load ROM from server
+                    const romUrl = CONFIG.romPath + game.rom;
+                    const response = await fetch(romUrl);
+                    
+                    if (!response.ok) {
+                        throw new Error(`ROM file not found: ${game.rom}`);
+                    }
+                    
+                    const romData = await response.arrayBuffer();
+                    State.currentGame = game;
+                    
+                    // Initialize emulator
+                    const canvas = document.getElementById('gameCanvas');
+                    this.emulator = new EmulatorCore(canvas);
+                    await this.emulator.loadROM(romData, game.type);
+                    
+                    // Load existing save if available
+                    const existingSave = await this.db.loadBattery(game.id);
+                    if (existingSave) {
+                        await this.emulator.loadSaveRAM(existingSave);
+                    }
+                    
+                    // Start the game
+                    this.emulator.start();
+                    State.isPlaying = true;
+                    State.playStartTime = Date.now();
+                    
+                    // Setup auto-save
+                    this.startAutoSave();
+                    this.startPlayTimeUpdate();
+                    
+                    // Update UI
+                    UIController.updateGameInfo(game);
+                    UIController.showEmulator();
+                    UIController.updateGameCard(game.id, 'playing');
+                    this.updateSaveSlots();
+                    UIController.showStatus(`${game.title} loaded successfully!`, 'success');
+                    
+                } catch (error) {
+                    UIController.showStatus('Error loading game: ' + error.message, 'error', 0);
+                    UIController.updateGameCard(game.id, '');
+                    console.error('Load game error:', error);
+                }
+            }
+
+            async saveGame() {
+                if (!State.currentGame || !this.emulator) return;
+                
+                try {
+                    const saveData = await this.emulator.getSaveRAM();
+                    if (saveData) {
+                        await this.db.saveBattery(State.currentGame.id, saveData);
+                        State.lastSaveTime = Date.now();
+                        UIController.updateLastSaved();
+                        UIController.showStatus('Game saved successfully!', 'success');
+                    } else {
+                        UIController.showStatus('No save data available', 'warning');
+                    }
+                } catch (error) {
+                    UIController.showStatus('Save failed: ' + error.message, 'error');
+                }
+            }
+
+            async saveState(slot) {
+                if (!State.currentGame || !this.emulator) return;
+                
+                try {
+                    const stateData = await this.emulator.captureState();
+                    const screenshot = await this.emulator.screenshot();
+                    
+                    if (stateData) {
+                        await this.db.saveState(State.currentGame.id, slot, stateData, screenshot);
+                        this.updateSaveSlots();
+                        UIController.showStatus(`State saved to slot ${slot}!`, 'success');
+                    } else {
+                        UIController.showStatus('Failed to capture state', 'error');
+                    }
+                } catch (error) {
+                    UIController.showStatus('Save state failed: ' + error.message, 'error');
+                }
+            }
+
+            async loadState(slot) {
+                if (!State.currentGame || !this.emulator) return;
+                
+                try {
+                    const state = await this.db.loadState(State.currentGame.id, slot);
+                    if (state) {
+                        const success = await this.emulator.restoreState(state.data);
+                        if (success) {
+                            this.updateSaveSlots();
+                            UIController.showStatus(`State loaded from slot ${slot}!`, 'success');
+                        } else {
+                            UIController.showStatus('Failed to restore state', 'error');
+                        }
+                    } else {
+                        UIController.showStatus(`No save state in slot ${slot}`, 'warning');
+                    }
+                } catch (error) {
+                    UIController.showStatus('Load state failed: ' + error.message, 'error');
+                }
+            }
+
+            async deleteState(slot) {
+                if (!State.currentGame) return;
+                
+                try {
+                    await this.db.deleteState(State.currentGame.id, slot);
+                    this.updateSaveSlots();
+                    UIController.showStatus(`State deleted from slot ${slot}`, 'success');
+                } catch (error) {
+                    UIController.showStatus('Delete state failed: ' + error.message, 'error');
+                }
+            }
+
+            updateSaveSlots() {
+                const slotsContainer = document.getElementById('saveSlots');
+                slotsContainer.innerHTML = '';
+                
+                for (let i = 1; i <= CONFIG.maxSaveStates; i++) {
+                    const slotDiv = document.createElement('div');
+                    slotDiv.className = 'save-slot';
+                    
+                    this.db.loadState(State.currentGame.id, i).then(state => {
+                        if (state) {
+                            const date = new Date(state.timestamp).toLocaleString();
+                            slotDiv.innerHTML = `
+                                <div class="save-slot-header">
+                                    <div class="save-slot-title">Slot ${i}</div>
+                                    <div class="save-slot-actions">
+                                        <button class="load-btn" onclick="app.loadState(${i})">Load</button>
+                                        <button class="delete-btn" onclick="app.deleteState(${i})">Delete</button>
+                                    </div>
+                                </div>
+                                <div class="save-slot-info">
+                                    Saved: ${date}
+                                </div>
+                            `;
+                        } else {
+                            slotDiv.innerHTML = `
+                                <div class="save-slot-header">
+                                    <div class="save-slot-title">Slot ${i} - Empty</div>
+                                    <div class="save-slot-actions">
+                                        <button class="save-btn" onclick="app.saveState(${i})">Save</button>
+                                    </div>
+                                </div>
+                                <div class="save-slot-info">
+                                    Click Save to create a state
+                                </div>
+                            `;
+                        }
+                    });
+                    
+                    slotsContainer.appendChild(slotDiv);
+                }
+            }
+
+            startAutoSave() {
+                if (State.saveInterval) {
+                    clearInterval(State.saveInterval);
+                }
+                
+                State.saveInterval = setInterval(async () => {
+                    if (State.isPlaying && this.emulator) {
+                        await this.saveGame();
+                    }
+                }, CONFIG.autoSaveInterval);
+            }
+
+            startPlayTimeUpdate() {
+                if (this.playTimeInterval) {
+                    clearInterval(this.playTimeInterval);
+                }
+                
+                this.playTimeInterval = setInterval(() => {
+                    UIController.updatePlayTime();
+                    this.updatePerformanceInfo();
+                }, 1000);
+            }
+
+            updatePerformanceInfo() {
+                // Simple FPS counter
+                if (window.performance && performance.now) {
+                    if (!this.lastFrameTime) this.lastFrameTime = performance.now();
+                    const now = performance.now();
+                    const fps = Math.round(1000 / (now - this.lastFrameTime));
+                    this.lastFrameTime = now;
+                    
+                    const fpsEl = document.getElementById('fpsCounter');
+                    if (fpsEl) fpsEl.textContent = fps;
+                }
+
+                // Memory usage (if available)
+                if (performance.memory) {
+                    const memoryMB = Math.round(performance.memory.usedJSHeapSize / 1048576);
+                    const memoryEl = document.getElementById('memoryUsage');
+                    if (memoryEl) memoryEl.textContent = `${memoryMB} MB`;
+                }
+
+                // Audio status (simple check)
+                const audioEl = document.getElementById('audioStatus');
+                if (audioEl && State.isPlaying) {
+                    audioEl.textContent = '🔊';
+                } else if (audioEl) {
+                    audioEl.textContent = '🔇';
+                }
+            }
+
+            setupKeyboardControls() {
+                document.addEventListener('keydown', (e) => {
+                    if (!State.isPlaying) return;
+                    
+                    switch(e.key.toLowerCase()) {
+                        case 'f5':
+                            e.preventDefault();
+                            this.saveState(1);
+                            break;
+                        case 'f8':
+                            e.preventDefault();
+                            this.loadState(1);
+                            break;
+                        case 'f11':
+                            e.preventDefault();
+                            this.toggleFullscreen();
+                            break;
+                        case ' ':
+                            e.preventDefault();
+                            this.togglePause();
+                            break;
+                        case 'p':
+                            if (e.shiftKey) {
+                                e.preventDefault();
+                                this.togglePerformanceInfo();
+                            }
+                            break;
+                        case 'e':
+                            if (e.ctrlKey || e.metaKey) {
+                                e.preventDefault();
+                                this.exportAllSaves();
+                            }
+                            break;
+                        case 'i':
+                            if (e.ctrlKey || e.metaKey) {
+                                e.preventDefault();
+                                document.getElementById('importSaveInput').click();
+                            }
+                            break;
+                    }
+                });
+            }
+
+            async resetGame() {
+                if (this.emulator && State.currentGame) {
+                    if (confirm('Reset the current game? Any unsaved progress will be lost.')) {
+                        this.emulator.reset();
+                        UIController.showStatus('Game reset', 'info');
+                    }
+                }
+            }
+
+            togglePause() {
+                if (this.emulator) {
+                    if (State.isPlaying) {
+                        this.emulator.pause();
+                        State.isPlaying = false;
+                        UIController.showStatus('Game paused', 'info');
+                    } else {
+                        this.emulator.start();
+                        State.isPlaying = true;
+                        UIController.showStatus('Game resumed', 'info');
+                    }
+                }
+            }
+
+            toggleFullscreen() {
+                if (!document.fullscreenElement) {
+                    document.documentElement.requestFullscreen();
+                } else {
+                    document.exitFullscreen();
+                }
+            }
+
+            async exportAllSaves() {
+                if (!State.currentGame) {
+                    UIController.showStatus('No game loaded to export', 'warning');
+                    return;
+                }
+
+                try {
+                    UIController.showStatus('Exporting saves...', 'info');
+                    
+                    const allSaves = await this.db.getAllSavesForGame(State.currentGame.id);
+                    
+                    // Create a comprehensive save package
+                    const savePackage = {
+                        gameInfo: {
+                            title: State.currentGame.title,
+                            system: State.currentGame.system,
+                            rom: State.currentGame.rom
+                        },
+                        saves: allSaves,
+                        exportDate: new Date().toISOString(),
+                        version: '1.0'
+                    };
+
+                    // Compress the data
+                    const compressed = pako.deflate(JSON.stringify(savePackage));
+                    
+                    // Create download
+                    const blob = new Blob([compressed], { type: 'application/octet-stream' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${State.currentGame.title.replace(/\s+/g, '_')}_saves_${new Date().toISOString().split('T')[0]}.sav`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    
+                    UIController.showStatus('Saves exported successfully!', 'success');
+                } catch (error) {
+                    UIController.showStatus('Export failed: ' + error.message, 'error');
+                }
+            }
+
+            async importSave(event) {
+                const file = event.target.files[0];
+                if (!file) return;
+
+                try {
+                    UIController.showStatus('Importing save...', 'info');
+                    
+                    const arrayBuffer = await file.arrayBuffer();
+                    let saveData;
+                    
+                    // Try to detect if it's a compressed save package
+                    try {
+                        const decompressed = pako.inflate(new Uint8Array(arrayBuffer));
+                        saveData = JSON.parse(new TextDecoder().decode(decompressed));
+                    } catch {
+                        // Try direct JSON parse
+                        const text = new TextDecoder().decode(arrayBuffer);
+                        saveData = JSON.parse(text);
+                    }
+
+                    if (!saveData.saves && !saveData.gameId) {
+                        throw new Error('Invalid save file format');
+                    }
+
+                    // Handle different save formats
+                    if (saveData.saves) {
+                        // It's our export package format
+                        if (saveData.gameInfo.title !== State.currentGame.title) {
+                            if (!confirm(`This save is for "${saveData.gameInfo.title}" but current game is "${State.currentGame.title}". Import anyway?`)) {
+                                return;
+                            }
+                        }
+                        
+                        // Import battery save
+                        if (saveData.saves.batterySave) {
+                            await this.db.saveBattery(State.currentGame.id, saveData.saves.batterySave.data);
+                        }
+                        
+                        // Import save states
+                        if (saveData.saves.saveStates) {
+                            for (const state of saveData.saves.saveStates) {
+                                await this.db.saveState(State.currentGame.id, state.slot, state.data, state.screenshot);
+                            }
+                        }
+                        
+                        UIController.showStatus('Save package imported successfully!', 'success');
+                    } else {
+                        // It's a single save format
+                        if (saveData.gameId && saveData.gameId !== State.currentGame.id) {
+                            if (!confirm(`This save is for a different game. Import anyway?`)) {
+                                return;
+                            }
+                        }
+                        
+                        if (saveData.data) {
+                            await this.db.saveBattery(State.currentGame.id, saveData.data);
+                            UIController.showStatus('Battery save imported successfully!', 'success');
+                        }
+                    }
+                    
+                    this.updateSaveSlots();
+                } catch (error) {
+                    UIController.showStatus('Import failed: ' + error.message, 'error');
+                }
+                
+                // Clear file input
+                event.target.value = '';
+            }
+
+            togglePerformanceInfo() {
+                const perfInfo = document.getElementById('performanceInfo');
+                if (perfInfo) {
+                    const isHidden = perfInfo.style.display === 'none';
+                    perfInfo.style.display = isHidden ? 'flex' : 'none';
+                }
+            }
+
+            backToMenu() {
+                if (confirm('Return to game menu? Current game progress will be saved.')) {
+                    this.cleanup();
+                    UIController.showGameSelection();
+                    UIController.showStatus('Ready! Select a game to begin.', 'info');
+                }
+            }
+
+            cleanup() {
+                // Save current game state
+                if (State.currentGame && this.emulator) {
+                    this.saveGame();
+                }
+                
+                // Stop intervals
+                if (State.saveInterval) {
+                    clearInterval(State.saveInterval);
+                    State.saveInterval = null;
+                }
+                
+                if (this.playTimeInterval) {
+                    clearInterval(this.playTimeInterval);
+                    this.playTimeInterval = null;
+                }
+                
+                // Destroy emulator
+                if (this.emulator) {
+                    this.emulator.destroy();
+                    this.emulator = null;
+                }
+                
+                // Reset state
+                State.emulator = null;
+                State.currentGame = null;
+                State.isPlaying = false;
+                State.playStartTime = null;
+                State.lastSaveTime = null;
+                
+                // Reset game cards
+                document.querySelectorAll('.game-card').forEach(card => {
+                    card.className = 'game-card';
+                    const status = card.querySelector('.status');
+                    if (status) status.textContent = 'Click to Play';
+                });
+            }
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // GLOBAL FUNCTIONS
+        // ═══════════════════════════════════════════════════════════
+        let app;
+
+        function hideStatus() {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = 'Ready!';
+            statusEl.className = 'status-message info';
+            statusEl.nextElementSibling.classList.add('hidden');
+        }
+
+        function backToMenu() {
+            app.backToMenu();
+        }
+
+        function saveGame() {
+            app.saveGame();
+        }
+
+        function saveState(slot) {
+            app.saveState(slot);
+        }
+
+        function loadState(slot) {
+            app.loadState(slot);
+        }
+
+        function resetGame() {
+            app.resetGame();
+        }
+
+        function toggleFullscreen() {
+            app.toggleFullscreen();
+        }
+
+        function exportAllSaves() {
+            app.exportAllSaves();
+        }
+
+        function importSave(event) {
+            app.importSave(event);
+        }
+
+        // ═══════════════════════════════════════════════════════════
+        // INITIALIZATION
+        // ═══════════════════════════════════════════════════════════
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                app = new EmulatorApp();
+                await app.init();
+            } catch (error) {
+                console.error('Application initialization failed:', error);
+                UIController.showStatus('Failed to start application: ' + error.message, 'error', 0);
+            }
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', (e) => {
+            if (State.isPlaying && State.currentGame) {
+                e.preventDefault();
+                e.returnValue = '';
+            }
+        });
+    </script>
+</body>
+</html>
